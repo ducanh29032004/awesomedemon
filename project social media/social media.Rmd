@@ -1,0 +1,324 @@
+---
+title: "Ứng dụng phân tích dữ liệu trong nhận diện hành vi nghiện mạng xã hội của sinh viên"
+author: "Vũ Đức Anh"
+date: "2025-05-15"
+output:
+  word_document: default
+latex_engine: xelatex
+---
+
+# Đề tài: Ứng dụng phân tích dữ liệu trong nhận diện hành vi nghiện mạng xã hội của sinh viên
+
+Báo cáo này tập trung phân tích hành vi nghiện mạng xã hội ở ba nhóm đối tượng: học sinh trung học phổ thông, sinh viên đại học và sinh viên đã tốt nghiệp đại học. Để khám phá đặc điểm và xu hướng sử dụng mạng xã hội.
+Bài sẽ áp dụng ba phương pháp phân tích dữ liệu chính: 
+Phân tích thành phần chính PCAđược sử dụng để rút gọn và tổng hợp thông tin từ các biến định lượng, giúp làm nổi bật các chiều chính trong hành vi người dùng. 
+Phân tích tương quan đa chiều CA được áp dụng nhằm làm rõ mối liên hệ giữa các biến phân loại, qua đó phát hiện các mô hình tiềm ẩn trong dữ liệu danh mục. 
+Phân cụm K-means được triển khai để phân nhóm các cá nhân theo đặc điểm hành vi sử dụng mạng xã hội, từ đó nhận diện các nhóm có mức độ sử dụng và ảnh hưởng tâm lý khác nhau. 
+Phân tích này không chỉ hỗ trợ mô tả thực trạng nghiện mạng xã hội trong giới trẻ, mà còn góp phần đề xuất hướng tiếp cận phù hợp trong việc hỗ trợ sức khỏe tinh thần và nâng cao nhận thức về việc sử dụng mạng xã hội một cách lành mạnh.
+
+# 1. Phương pháp phân tích thành phần chính PCA
+
+```{r warning=FALSE}
+library(tidyverse)
+library(FactoMineR)
+library(factoextra)
+library(psych)
+library(dplyr)
+library(clusterSim)
+library(ggplot2)
+data <- read.csv("Students Social Media Addiction.csv")
+dim(data)
+view(data)
+str(data)
+summary(data)
+```
+
+```{r}
+##xoá các biến thiếu
+pca_new <- na.omit(data)
+```
+
+
+```{r}
+#Chọn các biến định lượng
+library(dplyr)
+pca_new <- data %>%
+  dplyr::select(Avg_Daily_Usage_Hours, Sleep_Hours_Per_Night,
+                Mental_Health_Score, Conflicts_Over_Social_Media, Addicted_Score)
+```
+
+```{r}
+#tính ma trận tương quan giữa các biến trong pca_new
+cor_mat = cor(pca_new, use = 'complete.obs')
+cor_mat = cor(pca_new, use = 'complete.obs')
+```
+
+Ma trận tương quan cho thấy các biến định lượng trong dữ liệu có mối liên hệ chặt chẽ. Điểm nghiện mạng xã hội (Addicted_Score) có tương quan thuận mạnh với thời gian sử dụng và xung đột do mạng xã hội, nhưng tương quan âm rất mạnh với sức khỏe tâm thần và thời gian ngủ. Những kết quả này phản ánh rõ ràng rằng việc sử dụng mạng xã hội quá mức có thể liên quan đến các hậu quả tiêu cực về tâm lý và sinh hoạt cá nhân. Mức độ tương quan giữa các biến cũng cho thấy dữ liệu phù hợp để tiếp tục phân tích PCA.
+
+```{r}
+library(ggplot2)
+library(ggcorrplot)
+ggcorrplot(cor_mat, 
+           hc.order = TRUE, 
+           type = "lower",
+           lab = TRUE,
+           colors = c("#2c7bb6", "white", "#d7191c"),
+           title = "Ma trận tương quan")
+
+```
+Phân tích ma trận tương quan cho thấy thời gian sử dụng mạng xã hội trung bình mỗi ngày có mối tương quan thuận mạnh với mức độ nghiện và mâu thuẫn phát sinh từ mạng xã hội. Ngược lại, mức độ nghiện mạng xã hội có tương quan nghịch rất mạnh với sức khỏe tâm thần, đồng thời thời gian sử dụng mạng xã hội và mâu thuẫn xã hội đều liên quan âm với giấc ngủ và sức khỏe tâm thần. Bên cạnh đó, giấc ngủ đủ có liên hệ tích cực với sức khỏe tâm thần. Kết quả này cho thấy việc sử dụng mạng xã hội quá mức có thể ảnh hưởng tiêu cực đến giấc ngủ và sức khỏe tinh thần, đồng thời làm gia tăng các vấn đề xã hội liên quan.
+
+```{r warning=FALSE}
+#Kiểm định ba lét
+cortest.bartlett(pca_new)
+```
+
+Giả thuyết Kiểm định: 
+H0: Ma trận hệ số tương quan của tổng thể là ma trận đơn vị 
+H1: Ma trận hệ số tương quan của tổng thể không phải là ma trận đơn vị 
+Ta có P-value= 0\< 0,05 =\> Bác bỏ H0 =\> ma trận tương quan có ý nghĩa thống kê và phân tích thành phần chính là phù hợp với tập dữ liệu
+
+```{r}
+#phân tích thành phần chính 
+res.pca <- PCA(pca_new, graph = FALSE)
+summary(res.pca)
+ fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 100))
+```
+
+Biểu đồ Scree Plot cho thấy rằng thành phần chính đầu tiên Dim1 giải thích đến 85.4% phương sai của toàn bộ dữ liệu, trong khi thành phần chính thứ hai Dim2 chỉ giải thích 8.1% phương sai. Các thành phần còn lại giải thích lần lượt 3.7%, 2.1% và 0.8% phương sai. Như vậy, chỉ với hai thành phần chính đầu tiên, ta đã có thể giữ lại hơn 93.5% phương sai của dữ liệu gốc, điều này cho phép giảm số chiều từ 5 xuống còn 2 mà vẫn giữ lại hầu hết thông tin quan trọng. Việc giảm chiều như vậy không chỉ giúp đơn giản hóa mô hình mà còn giảm thiểu tính phức tạp tính toán, giúp quá trình phân tích dữ liệu trở nên hiệu quả hơn. Vậy trong bài sẽ quyết định sử dụng pc1 để phân tích thêm.
+
+```{r}
+ # Mức độ đóng góp của từng biến vào PC1
+fviz_contrib(res.pca, choice = "var", axes = 1)
+```
+
+Biểu đồ cho thấy các biến Addicted_Score, Mental_Health_Score, Conflicts_Over_Social_Media, và Avg_Daily_Usage_Hours có mức đóng góp đáng kể vào Dimension 1, đều trên mức 20%. Điều này cho thấy các yếu tố này là những nhân tố chính tạo nên trục Dimension 1, phản ánh rõ rệt về mức độ nghiện mạng xã hội và tác động của nó đến sức khỏe tâm lý.
+Ngược lại, biến Sleep_Hours_Per_Night có mức đóng góp thấp hơn so với các biến còn lại, chứng tỏ rằng Dim 1 ít liên quan đến giấc ngủ mà chủ yếu phản ánh những khía cạnh liên quan đến mức độ sử dụng mạng xã hội và những xung đột từ việc lạm dụng mạng xã hội.
+Từ đó, có thể suy ra rằng Dimension 1 mang ý nghĩa chính là "Ảnh hưởng của nghiện mạng xã hội đến sức khỏe tâm lý". Việc xác định đúng bản chất của Dimension 1 giúp phân tích chuyên sâu hơn về tác động của các yếu tố đến sức khỏe tinh thần và hành vi của người dùng mạng xã hội.
+
+```{r}
+# Mức độ đóng góp của từng biến vào PC2
+fviz_contrib(res.pca, choice = "var", axes = 2)
+```
+
+Biểu đồ đóng góp cho Dimension 2 cho thấy các biến Sleep_hours_per_night là yếu tố chính định hình thành phần này, với mức đóng góp hơn 60%. Trong khi đó, các biến còn lại đều đóng góp ít hơn 20%.
+
+```{r}
+#Variables
+fviz_pca_var(res.pca, col.var = "contrib",)
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07")
+           
+```
+
+Nhìn biểu đồ ta thấy Avg_Daily_Usage_Hours cùng hướng với trục chính PC1, cho thấy đây là nhung biến chính chi phối mức độ nghiện. Ngược lại, Mental_Health_Score và Sleep_Hours_Per_Night đi ngược chiều, phản ánh các yếu tố bảo vệ. Trong khi đó, Sleep_Hours_Per_Night cũng góp phần mạnh cho PC2, giúp tách biệt yếu tố giấc ngủ với các yếu tố còn lại
+
+```{r}
+#Biểu đồ pca ind dim1 dim2
+fviz_pca_ind(res.pca, geom.ind = "point", col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             legend.title = "Groups", pvalueCutoff =1, qvalueCutoff = 1)
+```
+
+Biểu đồ cho thấy PCA đã mô tả tốt phần lớn cá thể trong không gian hai chiều đầu tiên. Dim1 chiếm tới 85.4% phương sai và rõ ràng là trục chính phân biệt hành vi.
+
+# 2. Phân Tích CA
+
+```{r}
+#làm crosstable
+library(gmodels)
+ca_count<-CrossTable(data$Academic_Level, data$Most_Used_Platform) 
+library(openxlsx)
+openxlsx::write.xlsx(ca_count, 'ca_count.xlsx')
+#Đọc dữ liệu từ excel 
+ca <- read.xlsx("ca_count.xlsx", 1, colNames=TRUE,rowNames=TRUE)
+view(ca)
+```
+
+```{r}
+## kiểm định khi bình phương xem dữ liệu có phù hợp với phân tích tương ứng hay không
+ # Chisq test
+chisq <- chisq.test(ca)
+chisq
+```
+
+H₀: Hai biến là độc lập (không có mối liên hệ). H₁: Hai biến có liên hệ với nhau Ta có p-value \<2.2e-16 và \< 0.05 =\> Bác bỏ giả thuyết H0, hai biến có mối liên hệ với nhau
+
+```{r}
+# Phân tích ca
+res.ca <- CA(ca, graph = FALSE)
+res.ca$eig
+#vẽ biểu đồ scree plot
+library(ggplot2)
+fviz_screeplot(res.ca, addlabels = TRUE, ylim = c(0, 100))+
+geom_hline(yintercept=25, linetype=2, color="red")
+```
+
+Kết quả phân tích Phân tích Thành phần Chính (CA) cùng với biểu đồ scree plot cho thấy hai thành phần đầu tiên đã giải thích được toàn bộ phương sai của bảng dữ liệu. Trong đó, riêng thành phần thứ nhất (Dim 1) chiếm đến 81.64%. Tuy nhiên, để phân tích CA đạt độ tin cậy cao hơn, thường yêu cầu Dim 1 chiếm ít nhất 90% phương sai. Vì vậy, trong bài, ta sẽ sử dụng cả hai thành phần Dim 1 và Dim 2 để đảm bảo bao phủ đầy đủ thông tin.
+
+
+```{r}
+#Trực quan hoá xem cái nào đóng góp  
+fviz_contrib(res.ca, choice = "row", axes = 1)
+fviz_contrib(res.ca, choice = "row", axes = 2)
+fviz_contrib(res.ca, choice = "col", axes = 1)
+fviz_contrib(res.ca, choice = "col", axes = 2)
+
+```
+Biểu đồ cho thấy Facebook, WhatsApp, và LinkedIn đóng góp nhiều nhất vào Dim-1, phản ánh sự phổ biến trong nhóm người trưởng thành và đã tốt nghiệp. Ngược lại, các nền tảng như Twitter, WeChat, và LINE có đóng góp thấp hơn, cho thấy ít đặc trưng hơn trong việc phân biệt nhóm đối tượng. Điều này cho thấy sự khác biệt trong cách sử dụng mạng xã hội giữa các nhóm người dùng có trình độ học vấn khác nhau.
+
+Tuy nhiên, Biểu đồ cuối cùng lại cho thấy Snapchat là nền tảng có đóng góp lớn nhất vào Dim-2, nổi bật trong nhóm học sinh phổ thông. Ngược lại, các nền tảng như Facebook, LinkedIn, và WhatsApp có đóng góp nhỏ hơn, phù hợp với nhóm người đã tốt nghiệp. 
+Từ đó ta có thể thấy rằng xu hướng người dùng đã tốt nghiệp, trường thành thường sẽ sử dụng các ứng dụng phục vụ cho công việc và đời sống, ngược lại với đối tượng trung học phổ thông, nhóm đối tượng có xu hướng sử dụng các ứng dụng có tính giải trí cao hơn.
+
+```{r}
+#Đồ thị bất đối xứng dòng 
+fviz_ca_biplot(res.ca, repel = TRUE)
+fviz_ca_biplot(res.ca, 
+               map ="rowprincipal", arrow = c(TRUE, FALSE ),
+               repel = TRUE)
+fviz_ca_biplot(res.ca, 
+               map ="colprincipal", arrow = c(FALSE,TRUE ),
+               repel = TRUE)
+fviz_ca_biplot(res.ca, map ="colgreen", arrow = c(TRUE, FALSE),
+               repel = TRUE)
+fviz_ca_biplot(res.ca, arrow=c(TRUE, TRUE), repel=TRUE)
+```
+
+Nhìn vào biểu đồ trên, ta có thể nhận thấy các nền tảng như LinkedIn, VKontakte, WeChat, WhatsApp, Facebook, Twitter, Graduate nằm về phía bên phải của trục Dim1, cho thấy các biến này có mối liên hệ chặt chẽ với nhóm Graduate. Điều này có thể phản ánh xu hướng sử dụng các mạng xã hội và ứng dụng nhắm đến nhóm người đã tốt nghiệp đại học hoặc đang học sau đại học. Tuy nhiên linkedln có vẻ được ưa chuộng nhiều nhất so với các ứng dụng khác và có xu hướng được ít sử dụng twitter nhất 
+Ngược lại, các ứng dụng như Snapchat, YouTube, TikTok, Instagram, LINE, KakaoTalk nằm về phía bên trái của trục Dim1, đồng thời gần với nhóm High School và Undergraduate, cho thấy các nền tảng này phổ biến hơn với học sinh trung học và sinh viên đại học. Snapchat được sử dụng rộng rãi nhất bởi nhóm highschool, nổi bật hơn hẳn các ứng dụng khác
+Trục Dim2 giúp phân biệt các nhóm và biến theo chiều dọc: ví dụ, Snapchat nằm cao hơn trên Dim2, có thể ám chỉ đặc điểm riêng biệt hoặc sự ưu tiên sử dụng của nhóm High School. Trong khi đó, LINE và KakaoTalk nằm thấp hơn trên Dim2, tương ứng với các nhóm và hành vi sử dụng khác nhau.
+Nhìn chung biểu đồ cho thấy sự khác biệt rõ ràng về xu hướng sử dụng mạng xã hội và ứng dụng giữa các nhóm học vấn khác nhau, với nhóm Graduate nghiêng về các nền tảng mạng xã hội chuyên nghiệp và truyền thống hơn, trong khi High School và Undergraduate ưa chuộng các ứng dụng giải trí và mạng xã hội phổ biến hơn.
+
+# 3. Phương pháp phân cụm
+
+```{r}
+library(factoextra)
+library(cluster)
+library(fpc)
+library(dplyr)
+```
+
+```{r}
+#Chọn các biến định lượng
+cluster_data <- pca_new
+#Chuẩn hoá dữ liệu
+df.scaled <- scale(cluster_data)
+```
+
+```{r}
+#Kiểm tra khả năng phân cụm
+hopkins <- get_clust_tendency(df.scaled, n=nrow(df.scaled)-1, graph = FALSE)
+hopkins
+```
+
+Ta có chỉ số hopkins = 0.9129166 \> 0,5 =\> Vậy dữ liệu có xu hướng phân cụm rất mạnh.
+
+```{r}
+#Phân cụm k-mean và trực quan hoá 
+library(factoextra)
+kmean_calc <- function(df, ...){
+  kmeans(df,scaled = ..., nstart = 30)
+}
+km2 <- kmean_calc(df.scaled, 2)
+km3 <- kmean_calc(df.scaled, 3)
+km4 <- kmean_calc(df.scaled, 4)
+km5 <- kmean_calc(df.scaled, 5)
+km6 <- kmean_calc(df.scaled, 6)
+km7 <- kmean_calc(df.scaled, 7)
+p1 <- fviz_cluster(km2, data = df.scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 2") 
+p2 <- fviz_cluster(km3, data = df.scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 3")
+p3 <- fviz_cluster(km4, data = df.scaled, ellipse.type= "convex") + theme_minimal() + ggtitle("k = 4")
+p4 <- fviz_cluster(km5, data = df.scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 5")
+p5 <- fviz_cluster(km6, data = df.scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 6")
+p6 <- fviz_cluster(km7, data = df.scaled, ellipse.type = "convex") + theme_minimal() + ggtitle("k = 7")
+```
+
+```{r}
+library(cowplot)
+library(ggplot2)
+print(plot_grid(p1, p2, p3, p4, p5, p6, labels = c("k2", "k3", "k4", "k5", "k6", "k7")))
+```
+
+Các biểu đồ trên đã cho thấy Ở k=2, dữ liệu được chia thành hai nhóm khá rõ ràng, phân biệt chủ yếu theo chiều ngang (Dim1). Đây có thể là phân cụm đơn giản và dễ giải thích nhất, nhưng có thể chưa phản ánh đầy đủ tính đa dạng trong dữ liệu. Khi tăng lên k=3 và k=4, các nhóm trở nên phân tách tinh vi hơn với sự xuất hiện của nhiều nhóm nhỏ hơn, đồng thời có sự chồng lấn nhất định giữa các cụm. Ở k=5, k=6 và k=7, số lượng nhóm nhiều hơn, phân bố cụm khá phức tạp và các nhóm có xu hướng chồng lấn nhau nhiều hơn. Số cụm tối ưu là k = 2 hoặc 3, vì khi đó các nhóm phân tách rõ ràng và dễ giải thích. Số cụm lớn hơn gây chồng chéo và làm giảm độ chính xác phân loại.
+
+```{r}
+# vẽ đồ thị xác định số cụm
+## Dựa vào Elbow
+fviz_nbclust(df.scaled, kmeans, method = "wss", k.max = 10) + theme_minimal() + ggtitle("the Elbow Method")
+## PP Gap
+gap_stat <- clusGap(df.scaled, FUN = kmeans, nstart = 30, K.max = 10, B = 50)
+fviz_gap_stat(gap_stat) + theme_minimal() + ggtitle("fviz_gap_stat: Gap Statistic")
+```
+
+Phương pháp khuỷu tay cho thấy điểm gãy rõ rệt ở k = 2 hoặc 3, trong khi Gap Statistic đạt giá trị cao nhất tại k = 10.
+
+```{r}
+### pp Silhouette
+fviz_nbclust(df.scaled, kmeans, method = "silhouette", k.max = 10) + theme_minimal() + ggtitle("The Silhouette Plot")
+kmean2<- kmeans (df.scaled, centers=2, nstart=10)# 2 cụm(nstart represents the number of random data sets used to run the algorithm)
+str(kmean2)
+kmean2
+print(kmean2)
+summary(kmean2)
+```
+
+Theo phương pháp Silhouette, k = 2 là số cụm tối ưu nhất vì tạo ra các cụm tách biệt rõ ràng và có mức độ đồng nhất cao nhất bên trong từng cụm.
+Kết hợp với kết quả từ hai phương pháp còn lại, trong bài này sẽ sử dụng cả k = 2 và k = 3 để phân tích nhằm đảm bảo sự toàn diện và chính xác của kết quả.
+
+```{r}
+#Thực hiện phương pháp k mean
+kmean2<- kmeans (df.scaled, centers=2, nstart=10)# 2 cụm(nstart represents the number of random data sets used to run the algorithm)
+str(kmean2)
+kmean2
+print(kmean2)
+summary(kmean2)
+k_stats2 <- cluster.stats(dist(df.scaled), kmean2$cluster)
+desc2 <- cluster.Description(cluster_data,kmean2$cluster)
+k_stats2$dunn
+k_stats2
+#Trực quan hoá
+fviz_cluster(km2, 
+             data = df.scaled,
+             palette = c("#2E9FDF", "#00AFBB"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw())
+```
+
+Phân cụm K-means với K = 2 cho tỷ lệ phương sai giữa cụm đạt 62,6% vậy giữa 2 cụm có sự tách biệt. Ngoài ra,Việc sử dụng k = 2 trong phân cụm cho kết quả khá hiệu quả khi tạo ra hai nhóm phân biệt rõ ràng về hành vi sử dụng mạng xã hội và sức khỏe tâm thần. Cụm 1 gồm những người dùng mạng xã hội nhiều hơn(Avg_Daily_Usage_Hours dương), có mức độ nghiện và xung đột liên quan đến mạng xã hội cao, các chỉ số khá đồng đều, đồng thời có số giờ ngủ và điểm sức khỏe tâm thần thấp hơn trung bình. Cụm 2 ngược lại, là nhóm người dùng mạng xã hội ít, giấc ngủ tốt hơn và sức khỏe tâm thần ổn định hơn.Vậy ta sẽ chia thành 2 nhóm là nhóm sử dụng mạng xã hội một cách hợp lý và nhóm có xu hướng nghiện mạng xã hội cao Chỉ số Silhouette trung bình lần lượt là 0.50 và 0.53, cho thấy phân cụm ở mức tương đối tốt.  Chỉ số Dunn2 là 2.127215 cho thấy mức phân tách giữa cụm là tốt.
+
+
+```{r}
+kmean3<- kmeans (df.scaled, centers=3, nstart=10)# 3 cụm(nstart represents the number of random data sets used to run the algorithm)
+str(kmean3)
+kmean3
+print(kmean3)
+summary(kmean3)
+k_stats3 <- cluster.stats(dist(df.scaled), kmean3$cluster)
+library(clusterSim)
+desc2 <- cluster.Description(cluster_data,kmean3$cluster)
+k_stats3$dunn
+k_stats3
+#Trực quan hoá
+fviz_cluster(km3, 
+             data = df.scaled,
+             palette = c("#2E9FDF", "#00AFBB","#E7B800"), 
+             geom = "point",
+             ellipse.type = "convex", 
+             ggtheme = theme_bw())
+```
+
+Phân cụm K-means với K = 3 cho phương sai giữa cụm chiếm 75,4% tổng phương sai, khoảng cách quan sát trong nội bộ cụm khá nhỏ vậy kết quả phân cụm  đảm bảo được tính chất đồng đều. Chỉ số Silhouette trung bình theo cụm dao động từ 0.419 đến 0.458, phản ánh chất lượng cụm ở mức trung bình, vẫn còn hiện tượng chồng lấn ở một số điểm. Chỉ số Dunn2 =  1.640726 cho thấy mức độ tách biệt giữa các cụm là khá tốt.
+
+=>>So sánh giữa hai mô hình phân cụm cho thấy K = 2 cho kết quả tốt hơn K = 3. Cụ thể, mặc dù K = 3 có tỷ lệ phương sai = 75,4% giữa cụm cao hơn , nhưng các chỉ số đánh giá chất lượng cụm như Silhouette trung bình chỉ từ 0.419–0.458 và Dunn2= 1.6407 lại cho thấy mức độ đồng nhất và tách biệt chỉ ở mức trung bình. Ngược lại, với K = 2, tuy phương sai giữa cụm = 62,6% thấp hơn so với k = 33 nhưng chất lượng cụm lại tốt hơn rõ rệt, với chỉ số Silhouette trung bình đạt 0.50–0.53 và Dunn2 lên đến 2.1272. Ngoài ra, kết quả phân cụm với K = 2 cũng cho ra hai nhóm người dùng có sự phân biệt rõ ràng về hành vi sử dụng mạng xã hội và sức khỏe tâm thần, giúp dễ dàng diễn giải và ứng dụng trong thực tiễn. Do đó, mô hình với K = 2, chia ra làm 2 nhóm là nhóm sử dụng mạng xã hội một cách hợp lý và nhóm có xu hướng nghiện mạng xã hội cao, được đánh giá là phù hợp và hiệu quả hơn.
+
+# 4. Kết luận
+
+Trong thời đại số, mạng xã hội trở thành một phần thiết yếu trong cuộc sống của sinh viên. Tuy nhiên, sử dụng mạng xã hội quá mức có thể ảnh hưởng tiêu cực đến sức khỏe tinh thần và sự cân bằng cuộc sống.
+
+Trong nghiên cứu này, chúng tôi đã sử dụng ba phương pháp phân tích: PCA, CA và K-means, để tìm hiểu về hành vi nghiện mạng xã hội của sinh viên. Phân tích PCA cho thấy các yếu tố như thời gian sử dụng mạng xã hội, sức khỏe tâm lý và xung đột qua mạng xã hội có ảnh hưởng lớn nhất đến hành vi nghiện. Điều này cho thấy việc sử dụng mạng xã hội không chỉ đơn thuần là về thời gian mà còn liên quan đến tâm lý và các mối quan hệ cá nhân.
+
+Phân tích CA giúp làm rõ mối liên hệ giữa các yếu tố như trình độ học vấn và loại ứng dụng được sử dụng nhiều nhất. Điều này giúp nhận diện rõ hơn nhóm đối tượng dễ bị tác động từ mạng xã hội.
+
+Đặc biệt, khi sử dụng phân cụm K-means với k = 2, chúng tôi đã chia sinh viên thành hai nhóm: nhóm cân bằng và nhóm có nguy cơ nghiện cao. Nhóm cân bằng kiểm soát tốt thời gian sử dụng mạng xã hội và ít gặp vấn đề về sức khỏe tâm lý. Trong khi đó, nhóm có nguy cơ nghiện cao thường sử dụng mạng xã hội quá mức, dễ bị xáo trộn về tâm lý.
+
+Qua những kết quả này, có thể thấy rằng việc nghiện mạng xã hội không chỉ là vấn đề về tần suất sử dụng mà còn liên quan đến sự mất cân bằng trong cuộc sống. Những phát hiện này góp phần xây dựng các chương trình hỗ trợ giúp sinh viên quản lý hành vi sử dụng mạng xã hội một cách lành mạnh hơn.
